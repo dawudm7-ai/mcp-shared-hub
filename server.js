@@ -1,6 +1,6 @@
 /**
  * mcp-shared-hub
- * A local MCP server exposed over the modern "Streamable HTTP" transport at
+ * A hosted MCP server exposed over the modern "Streamable HTTP" transport at
  * POST /mcp, so it can be connected to from BOTH Claude Desktop and ChatGPT.
  *
  * SECURITY: requests must include a shared secret, either as:
@@ -8,25 +8,21 @@
  *   - or query string: ?secret=<secret>   (needed because some client UIs,
  *     like ChatGPT's connector setup, can't set custom headers)
  *
- * Set the secret via the HUB_SECRET environment variable before starting the
- * server. If HUB_SECRET is not set, the server refuses to start.
+ * Set the secret via the HUB_SECRET environment variable (in Glitch: the
+ * .env file) before starting the server.
  */
-import express, { Request, Response, NextFunction } from "express";
+import express from "express";
 import cors from "cors";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
-const PORT = Number(process.env.PORT || 3000);
+const PORT = process.env.PORT || 3000;
 const HUB_SECRET = process.env.HUB_SECRET;
 
 if (!HUB_SECRET) {
   console.error(
-    "ERROR: HUB_SECRET environment variable is not set.\n" +
-      "Set it before starting the server, e.g.:\n" +
-      "  (Windows PowerShell)  $env:HUB_SECRET=\"your-long-random-secret\"; npx tsx server.ts\n" +
-      "  (Windows cmd)          set HUB_SECRET=your-long-random-secret && npx tsx server.ts\n" +
-      "  (bash/zsh)             HUB_SECRET=your-long-random-secret npx tsx server.ts"
+    "ERROR: HUB_SECRET environment variable is not set. Add it in the .env file."
   );
   process.exit(1);
 }
@@ -35,7 +31,7 @@ const app = express();
 app.use(cors({ exposedHeaders: ["Mcp-Session-Id"] }));
 app.use(express.json());
 
-function checkSecret(req: Request, res: Response, next: NextFunction) {
+function checkSecret(req, res, next) {
   const headerSecret = req.header("x-hub-secret");
   const querySecret = typeof req.query.secret === "string" ? req.query.secret : undefined;
   const provided = headerSecret || querySecret;
@@ -85,7 +81,7 @@ function buildMcpServer() {
 
 // --- Streamable HTTP wiring (stateless: one transport per request) -------
 
-app.post("/mcp", checkSecret, async (req: Request, res: Response) => {
+app.post("/mcp", checkSecret, async (req, res) => {
   try {
     const server = buildMcpServer();
     const transport = new StreamableHTTPServerTransport({
@@ -109,22 +105,21 @@ app.post("/mcp", checkSecret, async (req: Request, res: Response) => {
   }
 });
 
-// Stateless mode doesn't support server-initiated streams or session
-// termination, but some clients probe GET/DELETE on the same URL — reply
-// clearly instead of a generic 404.
-app.get("/mcp", checkSecret, (_req: Request, res: Response) => {
+app.get("/mcp", checkSecret, (_req, res) => {
   res.status(405).json({ error: "Method not allowed. Use POST for MCP requests." });
 });
-app.delete("/mcp", checkSecret, (_req: Request, res: Response) => {
+app.delete("/mcp", checkSecret, (_req, res) => {
   res.status(405).json({ error: "Method not allowed (stateless server, no sessions to delete)." });
 });
 
-app.get("/health", (_req: Request, res: Response) => {
+app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/", (_req, res) => {
+  res.json({ name: "mcp-shared-hub", status: "ok", mcpEndpoint: "/mcp" });
+});
+
 app.listen(PORT, () => {
-  console.log(`mcp-shared-hub listening on http://localhost:${PORT}`);
-  console.log(`  MCP endpoint:      http://localhost:${PORT}/mcp?secret=...`);
-  console.log(`  Health check:      http://localhost:${PORT}/health`);
+  console.log(`mcp-shared-hub listening on port ${PORT}`);
 });
