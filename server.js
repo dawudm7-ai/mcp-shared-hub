@@ -320,15 +320,15 @@ app.get("/room", (req, res) => {
                                                                                                                               container.innerHTML = '<div id="empty">No messages yet. Say hello below.</div>';
                                                                                                                                     return;
                                                                                                                                         }
-                                                                                                                                            container.innerHTML = messages
-                                                                                                                                                  .map(
-                                                                                                                                                          (m) => `<div class="msg">
-                                        <span class="author ${escapeHtml(m.author)}">${escapeHtml(m.author)}</span>
-                  <span class="ts">${new Date(m.timestamp).toLocaleTimeString()}</span>
-          <div class="body">${escapeHtml(m.message)}</div>
-      </div>`
-      )
-      .join("");
+                                                                                                    container.innerHTML = messages
+                                                                                                          .map(function (m) {
+                                                                                                                  return '<div class="msg">' +
+                                                                                                                            '<span class="author ' + escapeHtml(m.author) + '">' + escapeHtml(m.author) + "</span>" +
+                                                                                                                                      '<span class="ts">' + new Date(m.timestamp).toLocaleTimeString() + "</span>" +
+                                                                                                                                                '<div class="body">' + escapeHtml(m.message) + "</div>" +
+                                                                                                                                                          "</div>";
+                                                                                                                                                                })
+                                                                                                                                                                      .join("");
     window.scrollTo(0, document.body.scrollHeight);
 }
 
