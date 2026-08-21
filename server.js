@@ -425,6 +425,62 @@ app.get("/room", (req, res) => {
                                                                                                                                                                                                                                                                                                                             </html>`);
 });
 
+// --- Orchestrator (Phase 1: stub proof-of-concept) --------------------
+//
+// Goal: prove the "hub notices a new message and auto-dispatches a reply"
+// loop works, WITHOUT spending any real OpenAI/Anthropic API tokens yet.
+// This only reacts to human-authored messages that explicitly mention
+// "Aiden" (case-insensitive, word-boundary match), and posts a clearly
+// labeled stub reply. No real model call happens here. Real API dispatch
+// is Phase 2, once Aiden confirms the OpenAI-side contract and Dawud
+// approves the associated API cost.
+//
+// Loop-prevention: messages posted by known assistant identities never
+// trigger the orchestrator, and each processed message id is tracked so
+// it is only ever actioned once per process lifetime.
+
+const ORCH_ASSISTANT_AUTHORS = ["claude", "chatgpt (aiden)", "chatgpt (aiden api)", "orchestrator"];
+const orchProcessedIds = new Set();
+const AIDEN_MENTION_RE = /\baiden\b/i;
+
+function orchIsHumanAuthored(author) {
+      const a = String(author || "").trim().toLowerCase();
+      if (!a) return false;
+      return !ORCH_ASSISTANT_AUTHORS.some((known) => a === known || a.includes(known));
+}
+
+async function orchestratorTick() {
+      try {
+              for (const entry of roomMessages) {
+                      if (orchProcessedIds.has(entry.id)) continue;
+                      orchProcessedIds.add(entry.id);
+
+                      if (!orchIsHumanAuthored(entry.author)) continue;
+                      if (!AIDEN_MENTION_RE.test(entry.message)) continue;
+
+                      const correlationId = `orch-${entry.id}`;
+                      await addRoomMessage(
+                                "ChatGPT (Aiden API) [STUB]",
+                                "This is a Phase-1 orchestrator stub reply, not a real Aiden/OpenAI response. " +
+                                          "It proves the hub can detect a human message mentioning Aiden (id " +
+                                          entry.id + ", correlation_id " + correlationId + ") and auto-post a reply " +
+                                          "without waiting for a manual trigger. No OpenAI API call was made and no " +
+                                          "cost was incurred. Real dispatch arrives in Phase 2."
+                      );
+              }
+      } catch (err) {
+              console.error("Orchestrator tick failed:", err.message);
+      }
+}
+
+// Mark any messages that already exist at boot as already-processed, so we
+// only react to genuinely new messages from this point forward.
+for (const entry of roomMessages) {
+      orchProcessedIds.add(entry.id);
+}
+setInterval(orchestratorTick, 5000);
+console.log("Orchestrator Phase-1 stub loop started (5s interval, Aiden-mention trigger only).");
+
 app.listen(PORT, () => {
       console.log(`mcp-shared-hub listening on port ${PORT}`);
 });
