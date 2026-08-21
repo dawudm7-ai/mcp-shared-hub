@@ -544,7 +544,7 @@ async function orchCallOpenAI(inputText, { timeoutMs = 30000, retried = false } 
                               model: OPENAI_MODEL,
                               instructions: AIDEN_API_V1_PROMPT,
                               input: [{ role: "user", content: [{ type: "input_text", text: inputText }] }],
-                              reasoning: { effort: "low" },
+                              reasoning: { effort: "none" },
                               max_output_tokens: 500,
                               store: false,
                       }),
@@ -564,8 +564,47 @@ async function orchCallOpenAI(inputText, { timeoutMs = 30000, retried = false } 
               }
 
               const data = await res.json();
-              const text = String(data.output_text || "").trim();
-              if (!text) throw new Error("OpenAI API returned empty output_text");
+
+              // Sanitized diagnostics only — never log the prompt or any secret.
+              const outputItems = Array.isArray(data.output) ? data.output : [];
+              console.log(
+                        "OpenAI response diagnostics: " +
+                                  JSON.stringify({
+                                            status: data.status,
+                                            incomplete_reason: data.incomplete_details ? data.incomplete_details.reason : null,
+                                            input_tokens: data.usage ? data.usage.input_tokens : null,
+                                            output_tokens: data.usage ? data.usage.output_tokens : null,
+                                            reasoning_tokens:
+                                                      data.usage && data.usage.output_tokens_details
+                                                                ? data.usage.output_tokens_details.reasoning_tokens
+                                                                : null,
+                                            output_item_types: outputItems.map((it) => it.type),
+                                            content_item_types: outputItems
+                                                      .flatMap((it) => (Array.isArray(it.content) ? it.content : []))
+                                                      .map((c) => c.type),
+                                  })
+              );
+
+              // Robust extraction: prefer output_text when non-empty; otherwise
+              // concatenate "message" output items' "output_text" content items.
+              let text = String(data.output_text || "").trim();
+              if (!text) {
+                      text = outputItems
+                                .filter((it) => it.type === "message")
+                                .flatMap((it) => (Array.isArray(it.content) ? it.content : []))
+                                .filter((c) => c.type === "output_text")
+                                .map((c) => c.text || "")
+                                .join("")
+                                .trim();
+              }
+
+              if (data.status === "incomplete") {
+                      const reason = data.incomplete_details ? data.incomplete_details.reason : "unknown";
+                      throw new Error(`OpenAI response incomplete (reason: ${reason}), not posting a blank message`);
+              }
+              if (!text) {
+                      throw new Error("OpenAI API returned no usable output text, not posting a blank message");
+              }
               return { text, model: data.model || OPENAI_MODEL };
       } catch (err) {
               clearTimeout(timer);
