@@ -1,4 +1,4 @@
-——/**
+/**
  * mcp-shared-hub
  * A hosted MCP server exposed over the modern "Streamable HTTP" transport at
  * POST /mcp, so it can be connected to from BOTH Claude Desktop and ChatGPT.
