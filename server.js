@@ -1,4 +1,4 @@
-/**
+——/**
  * mcp-shared-hub
  * A hosted MCP server exposed over the modern "Streamable HTTP" transport at
  * POST /mcp, so it can be connected to from BOTH Claude Desktop and ChatGPT.
@@ -16,6 +16,7 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createClient } from "@libsql/client";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
